@@ -15,7 +15,7 @@ namespace CrocCSharpBot
         /// </summary>
         private TelegramBotClient client;
         /// <summary>
-        /// Объект, осуществляющий протоколирование
+        /// Ведение журнала событий
         /// </summary>
         private NLog.Logger log = NLog.LogManager.GetCurrentClassLogger();
         /// <summary>
@@ -24,7 +24,8 @@ namespace CrocCSharpBot
         public Bot()
         {
             //создание клиента для Telegram
-            client = new TelegramBotClient("1085126912:AAEUp7iuUa0Uc6kke8-GbIT7iupocjjHZXA");
+            string token = Properties.Settings.Default.Token;
+            client = new TelegramBotClient(token);
             var user = client.GetMeAsync();
             var name = user.Result.Username;
             log.Trace(name);
@@ -39,32 +40,43 @@ namespace CrocCSharpBot
         /// <param name="e"></param>
         private void MessageProcessor(object sender, Telegram.Bot.Args.MessageEventArgs e)
         {
-            log.Trace("->| MessageProcessor()");
-            switch (e.Message.Type)
+            try
             {
-                case Telegram.Bot.Types.Enums.MessageType.Contact://телефон
-                    string phone = e.Message.Contact.PhoneNumber;
-                    client.SendTextMessageAsync(e.Message.Chat.Id, $"Твой телефон: {phone}");
-                    log.Trace(phone);
-                    break;
-                case Telegram.Bot.Types.Enums.MessageType.Text:
-                    if (e.Message.Text.Substring(0, 1) == "/")
-                    {
-                        CommandProcessor(e.Message);
-                    }
-                    else
-                    {
-                        client.SendTextMessageAsync(e.Message.Chat.Id, $"Привет! Ты сказал мне: {e.Message.Text}");
-                        log.Trace(e.Message.Text);
-                    }              
-                    break;
+                log.Trace("->| MessageProcessor()");
+                switch (e.Message.Type)
+                {
+                    case Telegram.Bot.Types.Enums.MessageType.Contact://телефон
+                        string phone = e.Message.Contact.PhoneNumber;
+                        client.SendTextMessageAsync(e.Message.Chat.Id, $"Твой телефон: {phone}");
+                        log.Trace(phone);
+                        break;
+                    case Telegram.Bot.Types.Enums.MessageType.Text:
+                        if (e.Message.Text.Substring(0, 1) == "/")
+                        {
+                            CommandProcessor(e.Message);
+                        }
+                        else
+                        {
+                            client.SendTextMessageAsync(e.Message.Chat.Id, $"Привет! Ты сказал мне: {e.Message.Text}");
+                            log.Trace(e.Message.Text);
+                        }
+                        break;
 
-                default:
-                    client.SendTextMessageAsync(e.Message.Chat.Id, $"Привет! Ты прислал мне: {e.Message.Type}, но я это пока не понимаю.");
-                    Console.WriteLine(e.Message.Type);
-                    break;
+                    default:
+                        client.SendTextMessageAsync(e.Message.Chat.Id, $"Привет! Ты прислал мне: {e.Message.Type}, но я это пока не понимаю.");
+                        log.Info(e.Message.Type);
+                        break;
+                }
             }
-            log.Trace("|-> MessageProcessor()");
+            catch (Exception ex)
+            {
+                log.Warn(ex);
+            }
+            finally
+            {
+                log.Trace("|-> MessageProcessor()");
+            }
+            
 
         }
         /// <summary>
