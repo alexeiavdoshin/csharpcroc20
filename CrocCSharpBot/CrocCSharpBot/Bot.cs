@@ -15,12 +15,19 @@ namespace CrocCSharpBot
         /// </summary>
         private TelegramBotClient client;
         /// <summary>
+        /// Объект, осуществляющий протоколирование
+        /// </summary>
+        private NLog.Logger log = NLog.LogManager.GetCurrentClassLogger();
+        /// <summary>
         /// Неинициализирующий конструктор
         /// </summary>
         public Bot()
         {
             //создание клиента для Telegram
             client = new TelegramBotClient("1085126912:AAEUp7iuUa0Uc6kke8-GbIT7iupocjjHZXA");
+            var user = client.GetMeAsync();
+            var name = user.Result.Username;
+            log.Trace(name);
             //обработчик событий 
             client.OnMessage += MessageProcessor; //???
 
@@ -32,12 +39,13 @@ namespace CrocCSharpBot
         /// <param name="e"></param>
         private void MessageProcessor(object sender, Telegram.Bot.Args.MessageEventArgs e)
         {
+            log.Trace("->| MessageProcessor()");
             switch (e.Message.Type)
             {
                 case Telegram.Bot.Types.Enums.MessageType.Contact://телефон
                     string phone = e.Message.Contact.PhoneNumber;
                     client.SendTextMessageAsync(e.Message.Chat.Id, $"Твой телефон: {phone}");
-                    Console.WriteLine(phone);
+                    log.Trace(phone);
                     break;
                 case Telegram.Bot.Types.Enums.MessageType.Text:
                     if (e.Message.Text.Substring(0, 1) == "/")
@@ -47,7 +55,7 @@ namespace CrocCSharpBot
                     else
                     {
                         client.SendTextMessageAsync(e.Message.Chat.Id, $"Привет! Ты сказал мне: {e.Message.Text}");
-                        Console.WriteLine(e.Message.Text);
+                        log.Trace(e.Message.Text);
                     }              
                     break;
 
@@ -56,7 +64,8 @@ namespace CrocCSharpBot
                     Console.WriteLine(e.Message.Type);
                     break;
             }
-            
+            log.Trace("|-> MessageProcessor()");
+
         }
         /// <summary>
         /// Обработка команды

@@ -20,11 +20,28 @@ namespace CrocCSharpBot
         /// <param name="args">Параметры командной строки</param>
         static void Main(string[] args)
         {
-            Console.WriteLine("Запуск бота в консольном режиме. Нажмите Enter для завершения.");
-            Bot bot;
-            bot = new Bot();
-            bot.Run();
-            Console.ReadLine();
+            try
+            {
+                Bot bot;
+                bot = new Bot();
+                bot.Run();
+                Console.WriteLine("Запуск бота в консольном режиме.");
+            }
+            catch (Exception ex)
+            {
+                //Отображение вложенных исключений
+                do
+                {
+                    Console.WriteLine(ex.Message);
+                    ex = ex.InnerException;
+                }
+                while (ex != null);
+            }
+            finally
+            {
+                Console.WriteLine("Нажмите Enter для завершения.");
+                Console.ReadLine();
+            }
         }
     }
 }
