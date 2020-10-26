@@ -19,6 +19,10 @@ namespace CrocCSharpBot
         /// </summary>
         private NLog.Logger log = NLog.LogManager.GetCurrentClassLogger();
         /// <summary>
+        /// Состояние бота
+        /// </summary>
+        private BotState state;
+        /// <summary>
         /// Неинициализирующий конструктор
         /// </summary>
         public Bot()
@@ -31,6 +35,8 @@ namespace CrocCSharpBot
             log.Trace(name);
             //обработчик событий 
             client.OnMessage += MessageProcessor; //???
+            //Чтение сохранённого состояния из файла
+            state = BotState.Load(Properties.Settings.Default.FileName);
 
         }
         /// <summary>
@@ -46,9 +52,32 @@ namespace CrocCSharpBot
                 switch (e.Message.Type)
                 {
                     case Telegram.Bot.Types.Enums.MessageType.Contact://телефон
-                        string phone = e.Message.Contact.PhoneNumber;
-                        client.SendTextMessageAsync(e.Message.Chat.Id, $"Твой телефон: {phone}");
+                        if (e.Message.Contact.UserId != e.Message.Chat.Id)
+                        {
+                            client.SendTextMessageAsync(e.Message.Chat.Id, $"Некорректный контакт");
+                            return;//??
+                        }
+                        string phone = e.Message.Contact.PhoneNumber;                        
                         log.Trace(phone);
+                        //Регистрация пользователя
+                        var user = new User()
+                        //Использование инициализатора
+                        {
+                            ID = e.Message.Contact.UserId,
+                            FirstName = e.Message.Contact.FirstName,
+                            LastName = e.Message.Contact.LastName,
+                            UserName = e.Message.Chat.Username,
+                            PhoneNumber = phone,
+                        };
+                        if (state.AddUser(user))
+                        {
+                            state.Save(Properties.Settings.Default.FileName);
+                            client.SendTextMessageAsync(e.Message.Chat.Id, $"Твой телефон добавлен в базу: {phone}");
+                        }
+                        else
+                        {
+                            client.SendTextMessageAsync(e.Message.Chat.Id, $"Твой телефон уже есть в базе: {phone}");
+                        }
                         break;
                     case Telegram.Bot.Types.Enums.MessageType.Text:
                         if (e.Message.Text.Substring(0, 1) == "/")
@@ -96,6 +125,16 @@ namespace CrocCSharpBot
                     var array = new KeyboardButton[] { button };
                     var reply = new ReplyKeyboardMarkup(array, true, true);
                     client.SendTextMessageAsync(message.Chat.Id, $"Привет, {message.Chat.FirstName}, скажи мне свой телефон", replyMarkup: reply);
+                    break;
+                case "help":
+                    string m = "Список возможных команд:\n";
+                    foreach (Commands s in Enum.GetValues(typeof(Commands)))
+                    {
+                        string cmd = s.ToString().ToLower();
+                        string descr = s.ToDescription();
+                        m += $"/{cmd} - {descr}\n";
+                    }
+                    client.SendTextMessageAsync(message.Chat.Id, m, replyMarkup: null);
                     break;
                 default:
                     client.SendTextMessageAsync(message.Chat.Id, $"Я пока не понимаю команду /{command}.");
