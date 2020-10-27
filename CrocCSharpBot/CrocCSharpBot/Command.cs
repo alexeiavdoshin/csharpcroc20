@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace CrocCSharpBot
 {
-    enum Commands
+    enum Command
     {
         /// <summary>
         /// Начало работы с ботом
@@ -18,6 +18,11 @@ namespace CrocCSharpBot
         /// Список возможных команд
         /// </summary>
         [Description("Список возможных команд")]
-        Help
+        Help,
+        /// <summary>
+        /// Регистрация пользователя
+        /// </summary>
+        [Description("Регистрация пользователя")]
+        Register
     }
 }
