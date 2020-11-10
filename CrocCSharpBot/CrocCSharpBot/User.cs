@@ -40,6 +40,14 @@ namespace CrocCSharpBot
         /// </summary>
         [XmlText()]
         public string Description;
+        /// <summary>
+        /// Состояние пользователя
+        /// </summary>
+        public UserState State;
+        /// <summary>
+        /// Метка времени последнего сообщения от пользователя
+        /// </summary>
+        public DateTime TimeStamp;
 
     }
 }

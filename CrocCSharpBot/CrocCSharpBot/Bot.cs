@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Telegram.Bot;
+using Telegram.Bot.Args;
 using Telegram.Bot.Types.ReplyMarkups;
 
 namespace CrocCSharpBot
@@ -24,6 +25,10 @@ namespace CrocCSharpBot
         /// </summary>
         private BotState state;
         /// <summary>
+        /// Таймер
+        /// </summary>
+        private System.Timers.Timer timer;
+        /// <summary>
         /// Неинициализирующий конструктор
         /// </summary>
         public Bot()
@@ -38,65 +43,74 @@ namespace CrocCSharpBot
             client.OnMessage += MessageProcessor; //???
             //Чтение сохранённого состояния из файла
             state = BotState.Load(Properties.Settings.Default.FileName);
+            //Таймер
+            timer = new System.Timers.Timer(Properties.Settings.Default.TimerTickInMilliseconds);
+            timer.Elapsed += TimerTick;
 
         }
+        /// <summary>
+        /// Событие таймера
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void TimerTick(object sender, System.Timers.ElapsedEventArgs e)
+        {
+            try
+            {
+                timer.Stop();
+                //Текущая метка времени
+                DateTime now = DateTime.Now;
+                //Проверка на неактивных пользователей
+                foreach(User user in state.Users)
+                {
+                    double delay = (now - user.TimeStamp).TotalSeconds;
+                    if((delay > Properties.Settings.Default.TimeOutInSeconds) &&
+                       (user.State != UserState.None))
+                    {
+                        user.State = UserState.None;
+                        client.SendTextMessageAsync(user.ID, $"Я скучаю, ты про меня забыл.");
+                        state.Save(Properties.Settings.Default.FileName);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                log.Warn(ex);
+            }
+            finally
+            {
+                timer.Start();
+            }
+        }
+
         /// <summary>
         /// Обработчик входящего сообщения
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
-        private void MessageProcessor(object sender, Telegram.Bot.Args.MessageEventArgs e)
+        private void MessageProcessor(object sender, MessageEventArgs e)
         {
             try
             {
                 log.Trace("->| MessageProcessor()");
-                switch (e.Message.Type)
+                //Фиксируем факт взаимодействия с пользователем
+                User user = state[e.Message.Chat.Id];
+                user.TimeStamp = DateTime.Now;
+                //Сохранение состояния бота
+                state.Save(Properties.Settings.Default.FileName);
+                //Построение имени метода для вызова
+                string mtype = e.Message.Type.ToString();
+                string method = $"{e.Message.Type}Processor";
+                //Ищем метод по имени
+                log.Info(e.Message.Type);
+                System.Reflection.MethodInfo info = GetType().GetMethod(method);
+                if (info == null)
                 {
-                    case Telegram.Bot.Types.Enums.MessageType.Contact://телефон
-                        if (e.Message.Contact.UserId != e.Message.Chat.Id)
-                        {
-                            client.SendTextMessageAsync(e.Message.Chat.Id, $"Некорректный контакт");
-                            return;//??
-                        }
-                        string phone = e.Message.Contact.PhoneNumber;                        
-                        log.Trace(phone);
-                        //Регистрация пользователя
-                        var user = new User()
-                        //Использование инициализатора
-                        {
-                            ID = e.Message.Contact.UserId,
-                            FirstName = e.Message.Contact.FirstName,
-                            LastName = e.Message.Contact.LastName,
-                            UserName = e.Message.Chat.Username,
-                            PhoneNumber = phone,
-                        };
-                        if (state.AddUser(user))
-                        {
-                            state.Save(Properties.Settings.Default.FileName);
-                            client.SendTextMessageAsync(e.Message.Chat.Id, $"Твой телефон добавлен в базу: {phone}");
-                        }
-                        else
-                        {
-                            client.SendTextMessageAsync(e.Message.Chat.Id, $"Твой телефон уже есть в базе: {phone}");
-                        }
-                        break;
-                    case Telegram.Bot.Types.Enums.MessageType.Text:
-                        if (e.Message.Text.Substring(0, 1) == "/")
-                        {
-                            CommandProcessor(e.Message);
-                        }
-                        else
-                        {
-                            client.SendTextMessageAsync(e.Message.Chat.Id, $"Привет! Ты сказал мне: {e.Message.Text}");
-                            log.Trace(e.Message.Text);
-                        }
-                        break;
-
-                    default:
-                        client.SendTextMessageAsync(e.Message.Chat.Id, $"Привет! Ты прислал мне: {e.Message.Type}, но я это пока не понимаю.");
-                        log.Info(e.Message.Type);
-                        break;
+                    client.SendTextMessageAsync(e.Message.Chat.Id, $"Я пока не понимаю такого: /{e.Message.Type}.");
+                    return;
                 }
+                //Вызов метода по имени
+                info.Invoke(this, new object[] {e.Message });
             }
             catch (Exception ex)
             {
@@ -107,6 +121,54 @@ namespace CrocCSharpBot
                 log.Trace("|-> MessageProcessor()");
             }
             
+
+        }
+        /// <summary>
+        /// Обработка текста
+        /// </summary>
+        /// <param name="message"></param>
+        public void TextProcessor(Telegram.Bot.Types.Message message)
+        {
+            if (message.Text.Substring(0, 1) == "/")
+            {
+                CommandProcessor(message);
+            }
+            else
+            {
+                client.SendTextMessageAsync(message.Chat.Id, $"Привет! Ты сказал мне: {message.Text}");
+                log.Trace(message.Text);
+            }
+        }
+        /// <summary>
+        /// Обработка контакта
+        /// </summary>
+        /// <param name="message"></param>
+        public void ContactProcessor(Telegram.Bot.Types.Message message)
+        {
+            User user = state[message.Chat.Id];
+            //Проверка состояния пользователя
+            if (user.State != UserState.Register)
+            {
+                client.SendTextMessageAsync(message.Chat.Id, $"Мне сейчас это не нужно");
+                return;//??
+            }
+            //Проверка на подмену контакта
+            if (message.Contact.UserId != message.Chat.Id)
+            {
+                client.SendTextMessageAsync(message.Chat.Id, $"Некорректный контакт");
+                return;//??
+            }
+            string phone = message.Contact.PhoneNumber;
+            log.Trace(phone);
+            //Регистрация пользователя
+            user.FirstName = message.Contact.FirstName;
+            user.LastName = message.Contact.LastName;
+            user.UserName = message.Chat.Username;
+            user.PhoneNumber = phone;
+            //Возврат к базовому состоянию пользователя
+            user.State = UserState.None;
+            state.Save(Properties.Settings.Default.FileName);
+            client.SendTextMessageAsync(message.Chat.Id, $"Твой телефон добавлен в базу: {phone}");
 
         }
         /// <summary>
@@ -167,21 +229,44 @@ namespace CrocCSharpBot
         /// <param name="message"></param>
         public void RegisterCommand(Telegram.Bot.Types.Message message)
         {
+            User user = state[message.Chat.Id];
+            //Проверка на наличие номера телефона
+            if (!String.IsNullOrEmpty(user.PhoneNumber))
+            {
+                client.SendTextMessageAsync(message.Chat.Id, $"{message.Chat.FirstName}, ты уже зарегистрирован", replyMarkup: null);
+                return;
+            }
             var button = new KeyboardButton("Поделись телефоном");
             button.RequestContact = true;
             //создание массива из одной кнопки
             var array = new KeyboardButton[] { button };
             var reply = new ReplyKeyboardMarkup(array, true, true);
             client.SendTextMessageAsync(message.Chat.Id, $"Привет, {message.Chat.FirstName}, скажи мне свой телефон", replyMarkup: reply);
+            //Задать состояние данных - ждём регистрацию пользователя
+            user.State = UserState.Register;
+            //Сохранить состояние бота
+            state.Save(Properties.Settings.Default.FileName);
         }
 
         /// <summary>
         /// Запуск бота
         /// </summary>
-        public void Run()
+        public void Start()
         {
             //Запуск приёма сообщений
             client.StartReceiving();
+            //Запуск таймера
+            timer.Start();
+        }
+        /// <summary>
+        /// Останов бота
+        /// </summary>
+        public void Stop()
+        {
+            //Останов приёма сообщений
+            client.StopReceiving();
+            //Останов таймера
+            timer.Stop();
         }
     }
 }
