@@ -25,7 +25,7 @@ namespace CrocCSharpBot
         /// Индексатор по идентификатору пользователя
         /// </summary>
         /// <param name="id">Идентификатор пользователя Telegram</param>
-        /// <returns></returns>
+        /// <returns>Всегда возвращает пользователя, создаёт его по необходимости</returns>
         public User this[long id]
         {
             get
